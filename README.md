@@ -98,9 +98,13 @@ if __name__ == "__main__":
 # Terminal 1: run the server
 python examples/server.py
 
-# Terminal 2: run the client (send image)
-python examples/client.py input.jpg output.png
+# Terminal 2: run the client
+python examples/client.py input_image output_image
 ```
+
+> Try running the client and server in different conda environments with different Python versions! :smile:
+> 
+> Also try the even simpler examples! 😆 See `examples/simple_server.py` and `examples/simple_client.py` that are completely dependancy free. 
 
 ## 🧪 Performance Test
 
