@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "local_comm"
+version = "1.0.0"
+description = "A lightweight, zero-dependency Python library for fast local inter-process communication (IPC) between services on the same Linux machine."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Christopher E. Mower", email = "christopher.mower@kcl.ac.uk" }]
+
+[tool.setuptools]
+packages = ["local_comm"]
