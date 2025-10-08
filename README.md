@@ -19,7 +19,7 @@
 
 ```bash
 # Clone the repo
-git clone https://github.com/cmower/local_comm.git
+git clone https://github.com/Robotics-Ark/local_comm.git
 cd local_comm
 
 # Install the package
