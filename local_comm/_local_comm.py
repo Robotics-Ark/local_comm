@@ -4,6 +4,7 @@
 
 import json
 import os
+import traceback
 import socket
 import struct
 import time
@@ -12,12 +13,15 @@ from multiprocessing import shared_memory
 from typing import Callable, Dict, Optional
 import select
 
+
 # ========== Public exceptions ==========
 class LocalCommError(Exception):
     """Base error for local_comm."""
 
+
 class ServiceUnavailable(LocalCommError):
     """Raised when a service socket cannot be reached within the connect timeout."""
+
 
 class ServerError(LocalCommError):
     """Raised when the server returns an error payload."""
@@ -26,13 +30,16 @@ class ServerError(LocalCommError):
 # --- helper to unregister from resource_tracker (avoid shutdown warnings) ---
 try:
     from multiprocessing import resource_tracker as _rt  # private API
+
     def _rt_unregister(shm_obj: shared_memory.SharedMemory) -> None:
         name = getattr(shm_obj, "_name", None) or shm_obj.name
         try:
             _rt.unregister(name, "shared_memory")
         except Exception:
             pass
+
 except Exception:
+
     def _rt_unregister(shm_obj):  # no-op fallback
         return
 
@@ -42,6 +49,7 @@ def _send_msg(sock: socket.socket, obj: dict) -> None:
     data = json.dumps(obj).encode("utf-8")
     sock.sendall(struct.pack("!I", len(data)) + data)
 
+
 def _recv_exact(sock: socket.socket, n: int) -> Optional[bytes]:
     buf = bytearray()
     while len(buf) < n:
@@ -50,6 +58,7 @@ def _recv_exact(sock: socket.socket, n: int) -> Optional[bytes]:
             return None
         buf.extend(chunk)
     return bytes(buf)
+
 
 def _recv_msg(sock: socket.socket) -> Optional[dict]:
     hdr = _recv_exact(sock, 4)
@@ -61,9 +70,11 @@ def _recv_msg(sock: socket.socket) -> Optional[dict]:
         return None
     return json.loads(data.decode("utf-8"))
 
+
 def _sock_path(service_name: str) -> str:
     safe = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in service_name)
     return f"/tmp/local_comm_{safe}.sock"
+
 
 def _unlink_if_exists(path: str) -> None:
     try:
@@ -98,7 +109,9 @@ class _ServiceCaller:
             except (FileNotFoundError, ConnectionRefusedError):
                 if time.time() > deadline:
                     s.close()
-                    raise ServiceUnavailable(f"service '{self.service_name}' not available")
+                    raise ServiceUnavailable(
+                        f"service '{self.service_name}' not available"
+                    )
                 time.sleep(0.02)
 
         if timeout is not None:
@@ -109,7 +122,7 @@ class _ServiceCaller:
         in_mv = None
         try:
             in_mv = memoryview(in_shm.buf)
-            in_mv[:len(data_in)] = data_in
+            in_mv[: len(data_in)] = data_in
         finally:
             if in_mv is not None:
                 try:
@@ -121,7 +134,9 @@ class _ServiceCaller:
         # 3) Do the request/response
         try:
             with s:
-                _send_msg(s, {"op": "process", "shm": in_shm.name, "size": len(data_in)})
+                _send_msg(
+                    s, {"op": "process", "shm": in_shm.name, "size": len(data_in)}
+                )
                 resp = _recv_msg(s)
                 if not resp or not resp.get("ok", False):
                     err = (resp or {}).get("err", "unknown error")
@@ -173,6 +188,7 @@ class _Service:
     sock: socket.socket
     callback: Callable[[bytes], bytes]
 
+
 class EndPoint:
     def __init__(self):
         self._services: Dict[str, _Service] = {}
@@ -180,7 +196,9 @@ class EndPoint:
     def create_service_caller(self, service_name: str) -> _ServiceCaller:
         return _ServiceCaller(service_name)
 
-    def create_service(self, service_name: str, callback: Callable[[bytes], bytes]) -> None:
+    def create_service(
+        self, service_name: str, callback: Callable[[bytes], bytes]
+    ) -> None:
         if service_name in self._services:
             raise ValueError(f"service '{service_name}' already exists")
         path = _sock_path(service_name)
@@ -231,7 +249,18 @@ class EndPoint:
             try:
                 out_bytes = srv.callback(req_bytes)
             except Exception as e:
-                _send_msg(conn, {"ok": False, "err": f"callback error: {e}"})
+                exc = traceback.format_exc()
+                print(
+                    f"[WARN] error occured when calling '{srv.name}', traceback as follows"
+                )
+                print(exc)
+                _send_msg(
+                    conn,
+                    {
+                        "ok": False,
+                        "err": f"callback error in '{srv.name}': {e}\n{exc}",
+                    },
+                )
                 return
 
             # Create output shm for client to read
@@ -239,13 +268,16 @@ class EndPoint:
             out_mv = None
             try:
                 out_mv = memoryview(out_shm.buf)
-                out_mv[:len(out_bytes)] = out_bytes
+                out_mv[: len(out_bytes)] = out_bytes
                 try:
                     out_mv.release()
                 except Exception:
                     pass
                 out_mv = None
-                _send_msg(conn, {"ok": True, "out_shm": out_shm.name, "out_size": len(out_bytes)})
+                _send_msg(
+                    conn,
+                    {"ok": True, "out_shm": out_shm.name, "out_size": len(out_bytes)},
+                )
             finally:
                 out_shm.close()
                 # client will unlink output; prevent server tracker from complaining:
